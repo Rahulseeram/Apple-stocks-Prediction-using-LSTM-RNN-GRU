@@ -16,6 +16,7 @@ from tensorflow.keras.layers import SimpleRNN, LSTM, GRU, Dense
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
 import matplotlib.pyplot as plt
+from datetime import datetime, timedelta
 
 ticker = "AAPL"
 data = yf.download(ticker, start="2015-01-01", end="2026-10-27")
@@ -125,3 +126,40 @@ plt.legend()
 
 plt.tight_layout()
 plt.show()
+
+# ---------------------- FUTURE FORECAST FUNCTION ----------------------
+def predict_future_date(target_date_str, model, model_name):
+    """
+    Predicts stock price for a future date (beyond dataset range) using the specified model.
+    """
+    target_date = datetime.strptime(target_date_str, "%Y-%m-%d")
+    last_known_date = data.index[-1].to_pydatetime()
+    last_sequence = scaled_data[-seq_length:].reshape(1, seq_length, 1)
+
+    current_date = last_known_date
+    future_scaled = []
+    while current_date < target_date:
+        pred_scaled = model.predict(last_sequence, verbose=0)
+        future_scaled.append(pred_scaled[0, 0])
+        last_sequence = np.append(last_sequence[:, 1:, :], [pred_scaled], axis=1)
+        current_date += timedelta(days=1)
+
+    future_prices = scaler.inverse_transform(np.array(future_scaled).reshape(-1, 1))
+    predicted_price = future_prices[-1, 0]
+
+    print(f"\n🔮 {model_name} Prediction for {ticker} on {target_date.date()}: ${predicted_price:.2f}")
+
+    # Plot forecast
+    plt.figure(figsize=(10,4))
+    plt.plot(data.index[-200:], data['Close'].tail(200), label="Historical")
+    future_dates = pd.date_range(start=last_known_date + timedelta(days=1), periods=len(future_prices))
+    plt.plot(future_dates, future_prices, label=f"{model_name} Predicted", linestyle="dashed")
+    plt.title(f"{ticker} {model_name} Stock Price Prediction until {target_date.date()}")
+    plt.xlabel("Date")
+    plt.ylabel("Price (USD)")
+    plt.legend()
+    plt.show()
+
+predict_future_date("2026-10-27", lstm_model, "LSTM")
+predict_future_date("2026-10-27", rnn_model, "RNN")
+predict_future_date("2026-10-27", gru_model, "GRU")
